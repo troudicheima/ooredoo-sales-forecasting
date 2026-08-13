@@ -1,55 +1,39 @@
 ﻿# -*- coding: utf-8 -*-
+"""
+main.py — Point d'entrée de l'application.
+
+Utilise st.navigation() (API moderne de Streamlit) plutôt que le simple
+dossier pages/, afin de garder le contrôle total sur l'ordre des éléments
+de la sidebar : le logo + le nom de l'application doivent apparaître
+AVANT le menu de navigation, ce que le dossier pages/ classique ne
+permet pas (Streamlit y place toujours le menu tout en haut, de force).
+"""
+
 import streamlit as st
 import sys
 import os
 
 sys.path.append(os.path.dirname(__file__))
 
-from utils.theme import apply_theme, render_header, render_kpi_card, render_sidebar_footer
-from utils.data_loader import load_full_dataset
-from utils.model_utils import load_model_metadata
+from utils.theme import apply_theme, render_sidebar_header, render_sidebar_footer
 
-apply_theme(page_title="Accueil", page_icon="📡")
+# 1) Configuration de la page + injection du CSS global (une seule fois, ici)
+apply_theme(page_title="Ooredoo Sales Intelligence", page_icon="📡")
 
-render_header(
-    title="Ooredoo Sales Intelligence",
-    subtitle="Plateforme de prévision et d'analyse des ventes télécoms, pilotée par l'intelligence artificielle.",
-    icon="📡",
-)
+# 2) Logo + nom de l'application, tout en haut de la sidebar
+render_sidebar_header()
 
-st.markdown(
-    """
-    <div class="section-card">
-        <p style="margin:0; font-size:14.5px; color:#374151; line-height:1.7;">
-        Utilisez le menu à gauche pour naviguer :<br><br>
-        📊&nbsp;&nbsp;<b>Dashboard</b> — vue d'ensemble analytique des ventes historiques (KPIs, tendances, saisonnalité)<br>
-        🔮&nbsp;&nbsp;<b>Prévisions</b> — prédiction des ventes du lendemain par région et par produit (modèle LightGBM)<br>
-        🤖&nbsp;&nbsp;<b>Assistant IA</b> — posez des questions en langage naturel et générez des rapports (RAG)
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+# 3) Déclaration des pages de l'application
+home_page = st.Page("views/home.py", title="Accueil", icon="🏠", default=True)
+dashboard_page = st.Page("pages/Dashboard.py", title="Dashboard", icon="📊")
+previsions_page = st.Page("pages/Previsions.py", title="Prévisions", icon="🔮")
+assistant_page = st.Page("pages/Assistant_IA.py", title="Assistant IA", icon="🤖")
 
-try:
-    df = load_full_dataset()
-    metadata = load_model_metadata()
+# 4) Menu de navigation, affiché juste APRÈS le logo/texte
+pg = st.navigation([home_page, dashboard_page, previsions_page, assistant_page])
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(render_kpi_card("🗂️", f"{len(df):,}".replace(",", " "), "Lignes dans le dataset"), unsafe_allow_html=True)
-    with col2:
-        st.markdown(render_kpi_card("📅", f"{df['date'].min().year}–{df['date'].max().year}", "Période couverte"), unsafe_allow_html=True)
-    with col3:
-        st.markdown(render_kpi_card("💰", f"{df['revenue'].sum():,.0f}".replace(",", " ") + " DT", "Chiffre d'affaires total"), unsafe_allow_html=True)
-    with col4:
-        st.markdown(render_kpi_card("🎯", f"{metadata['MAPE_%']:.1f} %", "MAPE du modèle (validation)"), unsafe_allow_html=True)
-
-except FileNotFoundError as e:
-    st.warning(
-        "⚠️ Certains fichiers de données ou de modèle sont introuvables. "
-        "Avez-vous bien exécuté `python train_and_save_model.py` avant de lancer l'application ?\n\n"
-        f"Détail : {e}"
-    )
-
+# 5) Footer de la sidebar (position fixe en bas, peu importe l'ordre d'appel)
 render_sidebar_footer()
+
+# 6) Exécution de la page actuellement sélectionnée
+pg.run()

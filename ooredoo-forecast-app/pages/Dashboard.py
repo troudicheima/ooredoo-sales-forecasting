@@ -6,10 +6,9 @@ import sys
 import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from utils.theme import apply_theme, render_header, render_kpi_card, style_fig, render_sidebar_footer
+from utils.theme import render_header, render_kpi_card, style_fig
 from utils.data_loader import load_full_dataset
 
-apply_theme(page_title="Dashboard", page_icon="📊")
 render_header(
     title="Dashboard",
     subtitle="Vue d'ensemble analytique des ventes historiques : tendances, saisonnalité, répartition.",
@@ -46,8 +45,6 @@ if len(date_range) != 2:
     date_start, date_end = df["date"].min(), df["date"].max()
 else:
     date_start, date_end = date_range
-
-render_sidebar_footer()
 
 mask = (
     df["region"].isin(regions)

@@ -4,16 +4,14 @@ import sys
 import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from utils.theme import apply_theme, render_header, render_badge, render_sidebar_footer
+from utils.theme import render_header, render_badge
 from utils.rag_utils import ask_llm, generate_monthly_report
 
-apply_theme(page_title="Assistant IA", page_icon="🤖")
 render_header(
     title="Assistant IA",
     subtitle="Interrogez vos données de ventes en langage naturel.",
     icon="🤖",
 )
-render_sidebar_footer()
 
 st.markdown(
     render_badge(

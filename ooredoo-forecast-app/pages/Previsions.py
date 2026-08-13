@@ -7,19 +7,17 @@ import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from utils.theme import (
-    apply_theme, render_header, render_kpi_card, render_prediction_card,
-    render_badge, style_fig, render_sidebar_footer,
+    render_header, render_kpi_card, render_prediction_card,
+    render_badge, style_fig,
 )
 from utils.data_loader import load_latest_snapshot, load_series_history
 from utils.model_utils import predict_next_day, load_model_metadata
 
-apply_theme(page_title="Prévisions", page_icon="🔮")
 render_header(
     title="Prévision des ventes",
     subtitle="Anticipez les ventes futures grâce à l'intelligence artificielle.",
     icon="🔮",
 )
-render_sidebar_footer()
 
 metadata = load_model_metadata()
 st.markdown(

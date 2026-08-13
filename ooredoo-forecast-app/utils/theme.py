@@ -358,11 +358,12 @@ section[data-testid="stSidebarNav"] a[aria-current="page"] span {{
 
 
 def apply_theme(page_title: str = "Ooredoo Sales Intelligence", page_icon: str = "📡", layout: str = "wide"):
-    """À appeler en tout premier dans chaque page : configure la page,
-    injecte le CSS global et affiche le logo + le bloc de marque dans la sidebar."""
+    """À appeler UNE SEULE FOIS, tout en haut de main.py (avant st.navigation()) :
+    configure la page et injecte le CSS global. Le bloc logo/texte se pose
+    séparément avec render_sidebar_header(), pour apparaître AVANT le menu
+    de navigation généré par st.navigation()."""
     st.set_page_config(page_title=f"{page_title} — Ooredoo", page_icon=page_icon, layout=layout)
     st.markdown(CSS, unsafe_allow_html=True)
-    render_sidebar_brand()
 
 
 @st.cache_data
@@ -377,8 +378,9 @@ def _get_logo_base64() -> str | None:
         return base64.b64encode(f.read()).decode()
 
 
-def render_sidebar_brand():
-    """Bloc logo + nom de l'application, côte à côte, en haut de la sidebar."""
+def render_sidebar_header():
+    """Bloc logo + nom de l'application, côte à côte, tout en haut de la
+    sidebar — à appeler dans main.py AVANT st.navigation()."""
     logo_b64 = _get_logo_base64()
     logo_html = (
         f'<img class="sidebar-brand-logo-img" src="data:image/png;base64,{logo_b64}">'
