@@ -1,36 +1,36 @@
-﻿# --- Application web ---
+﻿# ============================================================================
+# requirements.txt — dépendances de l'APPLICATION STREAMLIT DÉPLOYÉE uniquement
+# (le notebook Jupyter local utilise en plus prophet/xgboost/statsmodels/
+#  matplotlib/seaborn, déjà installés dans votre venv local — inutile de les
+#  redéployer sur Streamlit Cloud, ça n'allège que le déploiement en ligne)
+# ============================================================================
+
+# --- Application web ---
 streamlit>=1.38
 
 # --- Manipulation de données ---
 pandas>=2.0
 numpy>=1.26
 
-# --- Visualisation ---
-matplotlib>=3.8
+# --- Visualisation (Dashboard, Prévisions) ---
 plotly>=5.20
-seaborn>=0.13
 
-# --- Modèles de forecasting (selon celui que vous retenez) ---
+# --- Modèle de prévision utilisé en production ---
 scikit-learn>=1.4
 lightgbm>=4.5
-xgboost>=2.0
-prophet>=1.1
-statsmodels>=0.14
 joblib>=1.4
 
-# --- RAG : embeddings + vector store ---
+# --- RAG : base vectorielle + embeddings ---
 chromadb>=0.5
-sentence-transformers>=3.0          # embeddings locaux (gratuit, pas d'API)
-langchain>=0.3                       # orchestration RAG (optionnel mais pratique)
-langchain-community>=0.3
-langchain-anthropic>=0.2             # si vous utilisez l'API Claude comme LLM
+# ChromaDB utilise son modèle d'embedding ONNX intégré (léger, sans PyTorch)
+# via embedding_functions.DefaultEmbeddingFunction()
 
 # --- LLM (Groq - gratuit, pas de carte bancaire) ---
 groq>=0.11
 
-# --- Génération de rapports ---
-python-docx>=1.1                     # export Word
-fpdf2>=2.7                           # export PDF
+# --- Export des rapports ---
+python-docx>=1.1
+fpdf2>=2.7
 
 # --- Utilitaires ---
 python-dotenv>=1.0

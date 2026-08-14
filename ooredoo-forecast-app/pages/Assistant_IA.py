@@ -6,6 +6,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from utils.theme import render_header, render_badge
 from utils.rag_utils import ask_llm, generate_monthly_report
+from utils.report_export import generate_docx_report, generate_pdf_report
 
 render_header(
     title="Assistant IA",
@@ -105,10 +106,40 @@ with tab_report:
     if generate_report:
         with st.spinner("Génération du rapport en cours..."):
             report_text = generate_monthly_report(year, month)
+        st.session_state["last_report"] = report_text
+        st.session_state["last_report_period"] = (year, month)
+
+    if st.session_state.get("last_report"):
+        report_text = st.session_state["last_report"]
+        year, month = st.session_state["last_report_period"]
+        report_title = f"Rapport de ventes — {month:02d}/{year}"
+
         st.markdown('<div class="section-card">' + report_text.replace("\n", "<br>") + '</div>', unsafe_allow_html=True)
-        st.download_button(
-            "⬇️ Télécharger le rapport (.txt)",
-            data=report_text,
-            file_name=f"rapport_ventes_{year}_{month:02d}.txt",
-            mime="text/plain",
-        )
+
+        dl_col1, dl_col2, dl_col3 = st.columns(3)
+        with dl_col1:
+            st.download_button(
+                "⬇️ Télécharger (.txt)",
+                data=report_text,
+                file_name=f"rapport_ventes_{year}_{month:02d}.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+        with dl_col2:
+            docx_bytes = generate_docx_report(report_text, report_title)
+            st.download_button(
+                "⬇️ Télécharger (.docx)",
+                data=docx_bytes,
+                file_name=f"rapport_ventes_{year}_{month:02d}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+            )
+        with dl_col3:
+            pdf_bytes = generate_pdf_report(report_text, report_title)
+            st.download_button(
+                "⬇️ Télécharger (.pdf)",
+                data=pdf_bytes,
+                file_name=f"rapport_ventes_{year}_{month:02d}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
