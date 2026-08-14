@@ -4,31 +4,35 @@ utils/model_utils.py
 Chargement du modèle LightGBM sauvegardé + fonction de prédiction.
 """
 
+import os
 import json
 import joblib
 import pandas as pd
 import streamlit as st
 
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODELS_DIR = os.path.join(APP_ROOT, "models")
+
 
 @st.cache_resource
 def load_model():
-    return joblib.load("models/lightgbm_model.pkl")
+    return joblib.load(os.path.join(MODELS_DIR, "lightgbm_model.pkl"))
 
 
 @st.cache_resource
 def load_encoders():
-    return joblib.load("models/label_encoders.pkl")
+    return joblib.load(os.path.join(MODELS_DIR, "label_encoders.pkl"))
 
 
 @st.cache_data
 def load_feature_config():
-    with open("models/feature_cols.json", "r", encoding="utf-8") as f:
+    with open(os.path.join(MODELS_DIR, "feature_cols.json"), "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 @st.cache_data
 def load_model_metadata():
-    with open("models/model_metadata.json", "r", encoding="utf-8") as f:
+    with open(os.path.join(MODELS_DIR, "model_metadata.json"), "r", encoding="utf-8") as f:
         return json.load(f)
 
 

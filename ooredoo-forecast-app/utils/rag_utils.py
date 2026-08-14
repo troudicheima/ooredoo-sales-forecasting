@@ -18,7 +18,7 @@ import streamlit as st
 
 load_dotenv()
 
-VECTOR_STORE_PATH = "vector_store"
+VECTOR_STORE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "vector_store")
 COLLECTION_NAME = "ooredoo_knowledge"
 LLM_MODEL = "llama-3.3-70b-versatile"
 
@@ -47,9 +47,7 @@ RÈGLES STRICTES À RESPECTER ABSOLUMENT :
 
 @st.cache_resource
 def get_collection():
-    embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="all-MiniLM-L6-v2"
-    )
+    embedding_fn = embedding_functions.DefaultEmbeddingFunction()
     client = chromadb.PersistentClient(path=VECTOR_STORE_PATH)
     return client.get_collection(name=COLLECTION_NAME, embedding_function=embedding_fn)
 
