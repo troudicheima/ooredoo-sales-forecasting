@@ -55,21 +55,13 @@ with tab_chat:
         clicked_question = None
 
     for msg in st.session_state.messages:
-        bubble_class = "chat-bubble-user" if msg["role"] == "user" else "chat-bubble-assistant"
         avatar = "🧑‍💼" if msg["role"] == "user" else "🤖"
-        align = "flex-end" if msg["role"] == "user" else "flex-start"
-        st.markdown(
-            f"""
-            <div style="display:flex; flex-direction:column; align-items:{align};">
-                <div class="{bubble_class}">{avatar} {msg['content']}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if msg["role"] == "assistant" and msg.get("sources"):
-            with st.expander("📚 Sources utilisées pour cette réponse"):
-                for s in msg["sources"]:
-                    st.markdown(f"- {s}")
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.markdown(msg["content"])
+            if msg["role"] == "assistant" and msg.get("sources"):
+                with st.expander("📚 Sources utilisées pour cette réponse"):
+                    for s in msg["sources"]:
+                        st.markdown(f"- {s}")
 
     question = st.chat_input("Posez votre question sur les ventes, les tendances, le modèle...")
     question = question or clicked_question
@@ -114,7 +106,11 @@ with tab_report:
         year, month = st.session_state["last_report_period"]
         report_title = f"Rapport de ventes — {month:02d}/{year}"
 
-        st.markdown('<div class="section-card">' + report_text.replace("\n", "<br>") + '</div>', unsafe_allow_html=True)
+        # Rendu Markdown natif de Streamlit : gère correctement les titres (#, ##, ###),
+        # le gras (**...**), les listes ET les tableaux (| ... |), contrairement à un
+        # simple remplacement de sauts de ligne dans du HTML brut.
+        with st.container(border=True):
+            st.markdown(report_text)
 
         dl_col1, dl_col2, dl_col3 = st.columns(3)
         with dl_col1:

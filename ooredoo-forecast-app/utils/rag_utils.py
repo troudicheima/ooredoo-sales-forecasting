@@ -4,7 +4,8 @@ utils/rag_utils.py
 
 Pipeline RAG (Retrieval-Augmented Generation) :
 1. retrieve_context()  -> recherche les documents les plus pertinents dans ChromaDB
-2. ask_llm()            -> envoie la question + le contexte récupéré à Claude,
+2. retrieve_context_for_month() -> récupération EXACTE par métadonnées (rapports)
+3. ask_llm()            -> envoie la question + le contexte récupéré au LLM,
                            avec des règles strictes pour éviter les hallucinations
                            et interdire au LLM de prédire des ventes lui-même.
 """
@@ -20,7 +21,10 @@ load_dotenv()
 
 VECTOR_STORE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "vector_store")
 COLLECTION_NAME = "ooredoo_knowledge"
-LLM_MODEL = "llama-3.3-70b-versatile"
+
+# NOTE : "llama-3.3-70b-versatile" a été décommissionné par Groq le 16/08/2026.
+# Modèle de remplacement recommandé par Groq (email officiel) : openai/gpt-oss-120b
+LLM_MODEL = "openai/gpt-oss-120b"
 
 MOIS_FR = {
     1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
@@ -42,6 +46,20 @@ RÈGLES STRICTES À RESPECTER ABSOLUMENT :
 4. Réponds toujours en français, de façon claire, concise et compréhensible par un
    public non technique (managers, équipes commerciales).
 5. Quand c'est pertinent, appuie tes réponses sur des chiffres précis tirés du contexte.
+6. N'AVANCE JAMAIS de cause ou d'explication (Ramadan, Aïd, promotion, saisonnalité,
+   effet concurrentiel, migration technologique, etc.) pour justifier une variation de
+   ventes, SAUF si cette cause est EXPLICITEMENT mentionnée dans le contexte fourni pour
+   le mois concerné. Par exemple, ne mentionne un "effet Ramadan" sur un mois que si le
+   document de contexte de CE mois précis indique explicitement qu'il inclut le Ramadan.
+   Si tu ignores la cause réelle d'une variation, dis simplement "la cause de cette
+   variation n'est pas précisée dans les données disponibles" plutôt que de spéculer.
+7. Quand tu produis un tableau Markdown : chaque ligne de données DOIT contenir exactement
+   le même nombre de cellules que la ligne d'en-tête, et AUCUNE cellule ne doit être laissée
+   vide (si tu n'as pas d'information pour une cellule, écris "-"). N'ajoute JAMAIS de ligne
+   de commentaire, de note, ou de référence à une autre ligne à l'intérieur d'un tableau
+   (par exemple, n'écris jamais une ligne du type "déjà listé ci-dessus" ou "voir plus haut")
+   — chaque entité (région, produit, catégorie) n'apparaît qu'UNE SEULE FOIS dans un tableau,
+   avec toutes ses colonnes remplies normalement.
 """
 
 
@@ -62,10 +80,6 @@ def retrieve_context_for_month(year: int, month: int) -> list[str]:
     """
     Récupère le contexte pour un rapport mensuel par FILTRE EXACT sur les
     métadonnées (année/mois), plutôt que par recherche sémantique floue.
-    Cela garantit que le bon mois est toujours trouvé, même si le modèle
-    d'embedding ne fait pas parfaitement le lien entre "01/2025" et
-    "janvier 2025" par exemple.
-
     Inclut aussi les données du mois précédent, pour permettre au LLM de
     faire une comparaison d'un mois sur l'autre dans le rapport.
     """
@@ -87,11 +101,8 @@ def retrieve_context_for_month(year: int, month: int) -> list[str]:
             month_docs.extend(result["documents"])
         return month_docs
 
-    # Mois demandé
     docs.extend(fetch_month(year, month))
 
-    # Mois précédent (pour permettre une comparaison), en gérant le
-    # changement d'année (janvier -> décembre de l'année d'avant)
     prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
     prev_docs = fetch_month(prev_year, prev_month)
     if prev_docs:
@@ -101,7 +112,6 @@ def retrieve_context_for_month(year: int, month: int) -> list[str]:
         )
         docs.extend(prev_docs)
 
-    # Contexte utile en complément, toujours inclus (indépendant du mois)
     for doc_type in ["technology_yearly", "top_regions", "top_products",
                       "model_metrics", "business_assumptions"]:
         result = collection.get(where={"type": {"$eq": doc_type}})
@@ -114,14 +124,17 @@ def ask_llm(
     question: str,
     chat_history: list[dict] | None = None,
     context_docs: list[str] | None = None,
+    max_tokens: int = 800,
 ) -> tuple[str, list[str]]:
     """
     Retourne (réponse_du_llm, documents_utilisés_comme_contexte).
-    chat_history : liste de {"role": "user"/"assistant", "content": "..."} pour le
-                   suivi de conversation (optionnel).
     context_docs : si fourni, on saute la recherche sémantique et on utilise
                    directement ces documents comme contexte (utilisé par les
                    rapports mensuels, où l'on connaît exactement le mois voulu).
+    max_tokens : budget de génération. Les rapports (tableaux, plusieurs
+                 sections) ont besoin de bien plus de place qu'une réponse
+                 de chat classique -> generate_monthly_report() utilise une
+                 valeur plus élevée que la valeur par défaut du chat.
     """
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
@@ -140,8 +153,6 @@ def ask_llm(
         f"Question de l'utilisateur : {question}"
     )
 
-    # L'API Groq suit le format OpenAI : le prompt système est un message à part,
-    # placé en premier dans la liste des messages.
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(chat_history if chat_history else [])
     messages.append({"role": "user", "content": user_message})
@@ -149,8 +160,11 @@ def ask_llm(
     client = Groq(api_key=api_key)
     response = client.chat.completions.create(
         model=LLM_MODEL,
-        max_tokens=800,
+        max_tokens=max_tokens,
         temperature=0.3,
+        reasoning_effort="low",  # modèle de raisonnement : on limite l'effort de
+                                  # "réflexion" interne pour laisser un maximum
+                                  # de budget de tokens à la réponse elle-même
         messages=messages,
     )
     answer = response.choices[0].message.content
@@ -169,7 +183,12 @@ def generate_monthly_report(year: int, month: int) -> str:
         f"vendues et en chiffre d'affaires, en pourcentage). Structure le rapport "
         f"avec des sections courtes. Si aucune donnée n'est disponible pour ce mois "
         f"précis ou pour le mois précédent dans le contexte fourni, dis-le "
-        f"clairement au lieu d'improviser."
+        f"clairement au lieu d'improviser.\n\n"
+        f"Consignes de formatage des tableaux (à respecter strictement) : "
+        f"chaque région, catégorie ou produit doit apparaître UNE SEULE FOIS par "
+        f"tableau, avec toutes les colonnes remplies (jamais de cellule vide, "
+        f"écris '-' si une valeur manque) ; n'ajoute aucune ligne de commentaire "
+        f"ou de renvoi vers une autre ligne dans un tableau."
     )
-    answer, _ = ask_llm(question, context_docs=context_docs)
+    answer, _ = ask_llm(question, context_docs=context_docs, max_tokens=3000)
     return answer
