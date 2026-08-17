@@ -12,6 +12,7 @@ Les tableaux Markdown sont détectés et rendus comme de VRAIS tableaux
 
 import io
 import re
+import unicodedata
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
@@ -207,10 +208,57 @@ def generate_docx_report(report_text: str, title: str) -> bytes:
 # ---------------------------------------------------------------------------
 # EXPORT PDF
 # ---------------------------------------------------------------------------
+# Caractères "typographiques" que les LLM utilisent souvent (tirets longs,
+# guillemets courbes, espaces insécables, symboles) mais qui n'existent PAS
+# dans le jeu de caractères Latin-1 des polices de base de fpdf2 -> sans ce
+# remplacement, ils deviennent des "?" illisibles dans le PDF.
+_UNICODE_TO_LATIN1_SAFE = {
+    "\u2018": "'", "\u2019": "'",      # guillemets simples courbes ' '
+    "\u201c": '"', "\u201d": '"',      # guillemets doubles courbes " "
+    "\u2010": "-", "\u2011": "-",      # trait d'union / trait d'union insécable
+    "\u2012": "-", "\u2013": "-",      # tiret demi-cadratin (figure dash / en dash)
+    "\u2014": "-", "\u2015": "-",      # tiret cadratin / barre horizontale
+    "\u2212": "-",                      # signe moins mathématique − (très utilisé par les LLM)
+    "\ufe58": "-", "\ufe63": "-", "\uff0d": "-",  # variantes de tiret (formes compactes/pleine chasse)
+    "\u2026": "...",                    # points de suspension …
+    "\u202f": " ", "\u00a0": " ",       # espaces insécables (fine/normale)
+    "\u2192": "->", "\u2191": "+", "\u2193": "-",  # flèches → ↑ ↓
+    "\u0394": "Var.",                   # delta grec Δ (utilisé dans les tableaux)
+    "\u2248": "~",                      # signe environ ≈
+    "\u00d7": "x",                       # signe multiplication ×
+}
+_UNICODE_TRANSLATE_TABLE = str.maketrans(_UNICODE_TO_LATIN1_SAFE)
+
+
+def _normalize_unicode_punctuation(text: str) -> str:
+    """Filet de sécurité générique (en plus de la liste explicite ci-dessus) :
+    convertit automatiquement TOUT caractère de catégorie Unicode "tiret"
+    (Pd) en '-' et tout caractère "espace" (Zs) en ' ', même les variantes
+    qu'on n'a pas explicitement listées — utile car les LLM utilisent de
+    nombreuses variantes de tirets/espaces typographiques (signe moins
+    mathématique, espaces fines, etc.)."""
+    result = []
+    for ch in text:
+        cat = unicodedata.category(ch)
+        if cat == "Pd" or ch == "\u2212":  # tiret, ou signe moins mathématique (catégorie Sm)
+            result.append("-")
+        elif cat == "Zs":
+            result.append(" ")
+        else:
+            result.append(ch)
+    return "".join(result)
+
+
 def _latin1(text: str) -> str:
     """Les polices de base de fpdf2 (Helvetica) sont en Latin-1 : les accents
-    français passent très bien, on neutralise juste les caractères hors
-    Latin-1 (emojis, tirets typographiques Unicode, espaces insécables, etc.)."""
+    français passent très bien. On convertit d'abord les caractères
+    typographiques courants (guillemets courbes, Δ, flèches...) en leur
+    équivalent Latin-1 lisible, puis on normalise génériquement tous les
+    tirets/espaces Unicode, puis on neutralise en dernier recours tout
+    caractère hors Latin-1 restant (emojis, etc.) pour éviter une erreur
+    d'encodage."""
+    text = text.translate(_UNICODE_TRANSLATE_TABLE)
+    text = _normalize_unicode_punctuation(text)
     return text.encode("latin-1", "replace").decode("latin-1")
 
 
@@ -252,13 +300,19 @@ def generate_pdf_report(report_text: str, title: str) -> bytes:
             n_cols = len(block["header"])
             font_size = 9 if n_cols <= 5 else 7  # tableaux larges -> police plus petite pour tenir en page
             pdf.set_font("Helvetica", "", font_size)
+            pdf.set_text_color(20, 20, 20)
+            pdf.set_fill_color(255, 255, 255)  # réinitialise le fond (sinon le rouge du bandeau de
+                                                 # titre "fuit" sur les lignes de données du tableau)
             header_style = FontFace(emphasis="B", color=(255, 255, 255), fill_color=OOREDOO_RED_RGB)
+            body_style = FontFace(color=(20, 20, 20))
             with pdf.table(
                 borders_layout="ALL",
                 text_align="LEFT",
                 line_height=6,
                 col_widths=tuple([1] * n_cols),
                 headings_style=header_style,
+                cell_fill_color=(245, 245, 245),   # gris très clair pour les lignes alternées
+                cell_fill_mode="ROWS",             # une ligne sur deux colorée -> tableau lisible
             ) as pdf_table:
                 header_row = pdf_table.row()
                 for cell_text in block["header"]:
@@ -266,7 +320,8 @@ def generate_pdf_report(report_text: str, title: str) -> bytes:
                 for row_data in block["rows"]:
                     data_row = pdf_table.row()
                     for cell_text in row_data[:n_cols]:
-                        data_row.cell(_latin1(cell_text))
+                        data_row.cell(_latin1(cell_text), style=body_style)
+            pdf.set_text_color(20, 20, 20)
             pdf.ln(3)
 
     output = pdf.output()

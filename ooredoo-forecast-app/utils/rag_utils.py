@@ -70,10 +70,36 @@ def get_collection():
     return client.get_collection(name=COLLECTION_NAME, embedding_function=embedding_fn)
 
 
+# Documents "spéciaux" : un seul exemplaire chacun dans la base, noyés parmi
+# les ~530 documents mensuels très similaires -> la recherche sémantique pure
+# les rate parfois (ex: "quelle est la précision du modèle ?" ne retrouvait
+# pas toujours le document model_metrics). On les inclut donc SYSTÉMATIQUEMENT
+# dans le contexte, en plus des résultats de la recherche sémantique classique.
+ALWAYS_INCLUDE_TYPES = [
+    "model_metrics", "top_regions", "top_products",
+    "business_assumptions", "technology_yearly",
+]
+
+
+@st.cache_data
+def get_always_relevant_docs() -> list[str]:
+    collection = get_collection()
+    result = collection.get(where={"type": {"$in": ALWAYS_INCLUDE_TYPES}})
+    return result["documents"]
+
+
 def retrieve_context(question: str, n_results: int = 6) -> list[str]:
     collection = get_collection()
     results = collection.query(query_texts=[question], n_results=n_results)
-    return results["documents"][0]
+    semantic_docs = results["documents"][0]
+
+    # on fusionne la recherche sémantique avec les documents toujours inclus,
+    # sans doublon, en gardant l'ordre (les plus pertinents sémantiquement en premier)
+    combined = list(semantic_docs)
+    for doc in get_always_relevant_docs():
+        if doc not in combined:
+            combined.append(doc)
+    return combined
 
 
 def retrieve_context_for_month(year: int, month: int) -> list[str]:
