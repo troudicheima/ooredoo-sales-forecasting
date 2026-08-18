@@ -21,7 +21,15 @@ lightgbm>=4.5
 joblib>=1.4
 
 # --- RAG : base vectorielle + embeddings ---
-chromadb>=0.5
+# IMPORTANT : version FIGÉE (==) et non "au moins" (>=) -> le format de
+# sauvegarde interne de ChromaDB change parfois entre versions ; si votre
+# PC et Streamlit Cloud installent des versions différentes, le vector_store
+# construit en local devient illisible une fois déployé (erreur
+# "Could not build embedding function ... from config"). En figeant la
+# version ici ET en installant exactement celle-ci en local avant de
+# reconstruire le vector_store, on garantit que les deux environnements
+# utilisent le même format.
+chromadb==1.5.9
 # ChromaDB utilise son modèle d'embedding ONNX intégré (léger, sans PyTorch)
 # via embedding_functions.DefaultEmbeddingFunction()
 

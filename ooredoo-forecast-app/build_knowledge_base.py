@@ -62,7 +62,10 @@ def build_documents(df: pd.DataFrame, metadata: dict) -> tuple[list[str], list[d
             f"{r['quantity_sold']:.0f} unités vendues pour un chiffre d'affaires "
             f"total de {r['revenue']:.0f} DT (toutes régions et tous produits confondus)."
         )
-        metadatas.append({"type": "national_monthly", "year": int(r["year"]), "month": int(r["month"])})
+        metadatas.append({
+            "type": "national_monthly", "year": int(r["year"]), "month": int(r["month"]),
+            "quantity_sold": float(r["quantity_sold"]), "revenue": float(r["revenue"]),
+        })
 
     # -------------------------------------------------------------
     # 2) Résumé mensuel par catégorie de produit
@@ -181,10 +184,8 @@ def main():
         shutil.rmtree(VECTOR_STORE_PATH)
 
     print("Indexation dans ChromaDB (téléchargement du modèle d'embedding "
-          "si première utilisation)...")
-    embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="all-MiniLM-L6-v2"
-    )
+          "ONNX si première utilisation, ~50 Mo, léger et sans PyTorch)...")
+    embedding_fn = embedding_functions.DefaultEmbeddingFunction()
     client = chromadb.PersistentClient(path=VECTOR_STORE_PATH)
     collection = client.create_collection(name=COLLECTION_NAME, embedding_function=embedding_fn)
 
